@@ -23,10 +23,10 @@
  * 全局变量定义
  *===========================================================================*/
 
-/* 随机静态地址: C6:A5:E4:D3:C2:E1
+/* 随机静态地址: 66:55:44:33:22:11
  * 在 BLE PDU 中以小端存储 (LSB first) */
 const uint8_t adv_addr[BDADDR_SIZE] = {
-	0xE1, 0xC2, 0xD3, 0xE4, 0xA5, 0xC6
+	0x11, 0x22, 0x33, 0x44, 0x55, 0x66
 };
 
 /* AD 结构体:
@@ -71,7 +71,7 @@ int main(void)
 {
 	printk("=== BLE PHY Raw TX Demo (HAL API) ===\n");
 	printk("Device Name: ZephyrRaw\n");
-	printk("Address: C6:A5:E4:D3:C2:E1 (Random Static)\n\n");
+	printk("Address: 66:55:44:33:22:11 (Random Static)\n\n");
 
 	/* 注意: 我们不调用 bt_enable(), 直接使用底层 HAL */
 

@@ -138,8 +138,11 @@ void ppi_configure(void)
 	 * 功能: 当 TIMER1 计数到 CC[1] 时, PPI 自动触发 Radio TXEN。
 	 *        用于 RX→TX 转换 (SCAN_REQ RX 结束后启动 TX 发送 SCAN_RSP)。
 	 *
-	 * CC[1] = T_IFS - TX_ramp_delay
-	 *       = 150 - 40 = 110 μs
+	 * CC[1] = T_IFS - TX_ramp_delay - RX_chain_delay
+	 *       = 150 - 40 - 10 = 100 μs
+	 *
+	 * RX END 事件比空口最后 bit 晚 RX_chain_delay ≈ 10μs,
+	 * 必须从 CC 值中扣除, 否则空口 T_IFS 会偏大 10μs。
 	 *
 	 * 对应真实 Controller:
 	 *   hal_radio_txen_on_sw_switch(cc, ppi)

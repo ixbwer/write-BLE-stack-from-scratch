@@ -40,6 +40,12 @@
 /* TX ramp-up 延迟 (μs): TXEN → READY → START ≈ 40 μs */
 #define TX_RAMP_US       40
 
+/* RX chain delay (μs): 空口最后一个 bit → EVENTS_END 之间的内部处理延迟
+ * nRF52832 1M PHY ≈ 10 μs (数据来源: nRF52832 Product Specification,
+ * RADIO Timing, "Time from last bit on air to END event")
+ * TX END 无此延迟: END 事件与最后 bit 对齐。 */
+#define RX_CHAIN_DELAY_US  10
+
 /* RX 超时 (μs) */
 #define RX_TIMEOUT_US    500
 

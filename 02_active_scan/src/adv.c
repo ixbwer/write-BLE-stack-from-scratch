@@ -79,11 +79,21 @@ static void adv_on_channel(uint32_t channel)
 	NRF_RADIO->SHORTS = RADIO_SHORTS_READY_START_Msk |
 			    RADIO_SHORTS_END_DISABLE_Msk;
 
-	/* 设置 CC 值 (TX 和 RX 阶段都需要) */
+	/* 设置 CC 值 (TX→RX 和 RX→TX 阶段分别使用)
+	 *
+	 * CC[0] (TX→RX): ADV_IND TX END 后切 RX
+	 *   TX END 事件与空口最后 bit 对齐 (无 chain delay)
+	 *   CC[0] = T_IFS - RX_RAMP = 150 - 40 = 110μs
+	 *
+	 * CC[1] (RX→TX): SCAN_REQ RX END 后切 TX
+	 *   RX END 事件比空口最后 bit 晚 RX_CHAIN_DELAY ≈ 10μs
+	 *   必须补偿: CC[1] = T_IFS - TX_RAMP - RX_CHAIN_DELAY
+	 *                    = 150 - 40 - 10 = 100μs
+	 */
 	nrf_timer_cc_set(NRF_TIMER1, (nrf_timer_cc_channel_t)CC_IDX_RXEN,
-			 T_IFS_US - RX_RAMP_US);   /* 110μs */
+			 T_IFS_US - RX_RAMP_US);                       /* 110μs */
 	nrf_timer_cc_set(NRF_TIMER1, (nrf_timer_cc_channel_t)CC_IDX_TXEN,
-			 T_IFS_US - TX_RAMP_US);   /* 110μs */
+			 T_IFS_US - TX_RAMP_US - RX_CHAIN_DELAY_US);   /* 100μs */
 
 	/* 确保 PPI_CH_RXEN 和 PPI_CH_TXEN 都禁用 (TX 期间不需要自动切换) */
 	nrf_ppi_channels_disable(NRF_PPI, BIT(PPI_CH_RXEN) | BIT(PPI_CH_TXEN));
@@ -166,13 +176,13 @@ static void adv_on_channel(uint32_t channel)
 	/* ADDRESS 匹配!
 	 *
 	 * 现在 CC[0] 已经完成了使命 (RXEN 已触发), 可以安全禁用 PPI_CH_RXEN。
-	 * 同时启用 PPI_CH_TXEN: CC[1]=110μs 将在 RX END 后触发 TXEN → SCAN_RSP。
+	 * 同时启用 PPI_CH_TXEN: CC[1]=100μs 将在 RX END 后触发 TXEN → SCAN_RSP。
 	 *
-	 * ★ FIX: CC[1] 已在 TX 开始前设置好 (= T_IFS - TX_RAMP = 110μs)。
-	 *   不能在此处设置 CC[1]! 因为 ADDRESS 触发时 Timer ≈ 190μs > 110μs,
+	 * ★ FIX: CC[1] 已在 TX 开始前设置好 (= T_IFS - TX_RAMP - RX_CHAIN_DELAY = 100μs)。
+	 *   不能在此处设置 CC[1]! 因为 ADDRESS 触发时 Timer ≈ 190μs > 100μs,
 	 *   CC[1] 已被过去, 下次匹配要等到 Timer 溢出 (65535μs 后)。
 	 *   CC[1] 必须在 RX END 时 PPI 清零 Timer 之后生效, 而 Timer 的零点是 RX END。
-	 *   我们在 TX 前设置好的 CC[1]=110, 在 RX END + 110μs 时自然触发。
+	 *   我们在 TX 前设置好的 CC[1]=100, 在 RX END + 100μs 时自然触发。
 	 *
 	 * 对应真实 Controller:
 	 *   sw_switch(SW_SWITCH_RX, SW_SWITCH_TX, phy_rx, ...);
@@ -219,12 +229,14 @@ static void adv_on_channel(uint32_t channel)
 	 *   t = 0:     RX END, PPI 清零 Timer → Timer 从 0 计数
 	 *   t ≈ 1μs:  RX DISABLED (SHORTS END→DISABLE)
 	 *   t ≈ 5μs:  验证 SCAN_REQ 完成 (我们在这里)
-	 *   t = 110μs: CC[1] 匹配 → PPI CH2 → TXEN (Radio 从 DISABLED 进入 TXRU)
-	 *   t = 150μs: TX READY → (SHORTS READY→START) → TX 开始
-	 *   t ≈ 550μs: TX END → DISABLED
+	 *   t = 100μs: CC[1] 匹配 → PPI CH2 → TXEN (Radio 从 DISABLED 进入 TXRU)
+	 *   t = 140μs: TX READY → (SHORTS READY→START) → TX 开始
+	 *   t ≈ 540μs: TX END → DISABLED
 	 *
-	 * 我们需要在 t=110μs 前完成: radio_pkt_tx_set + SHORTS 设置 + 清除事件。
-	 * 有 ~105μs 的充足时间。
+	 * 空口 T_IFS = 100 + 40 + RX_CHAIN_DELAY(10) = 150μs ✓
+	 *
+	 * 我们需要在 t=100μs 前完成: radio_pkt_tx_set + SHORTS 设置 + 清除事件。
+	 * 有 ~95μs 的充足时间。
 	 *==============================================================*/
 
 	radio_pkt_tx_set(&pdu_scan_rsp);
