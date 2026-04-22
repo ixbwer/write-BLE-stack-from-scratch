@@ -1,17 +1,19 @@
 /*
- * BLE PHY Raw TX Demo — 使用 Controller HAL 层接口
+ * BLE PHY Raw TX Demo — using Controller HAL APIs
  *
- * 本 Demo 使用 Zephyr BLE Controller 内部的 HAL 抽象层接口
- * （radio_phy_set, radio_aa_set, radio_crc_configure 等）
- * 以及标准 struct pdu_adv 构建并发送合规的 BLE 广播包。
+ * This demo uses the internal HAL abstraction from the Zephyr BLE Controller
+ * (radio_phy_set, radio_aa_set, radio_crc_configure, and related helpers)
+ * together with the standard struct pdu_adv type to build and transmit a
+ * valid BLE advertising packet.
  *
- * PDU Type: ADV_NONCONN_IND (不可连接非定向广播)
- * 使用 nRF Connect 等 BLE 扫描工具可看到设备 "ZephyrRaw"
+ * PDU Type: ADV_NONCONN_IND (non-connectable undirected advertising)
+ * The device "ZephyrRaw" can be discovered with BLE scanner tools such as
+ * nRF Connect.
  *
- * 代码结构:
- *   ble_common.h  — 公共类型、常量与全局变量声明
- *   hal_radio.c/h — HAL 层: 硬件初始化与 Radio 配置
- *   main.c        — 全局变量定义、PDU 构造与主循环
+ * Code layout:
+ *   ble_common.h  - shared types, constants, and global declarations
+ *   hal_radio.c/h - HAL layer: hardware init and radio configuration
+ *   main.c        - global definitions, PDU construction, and main loop
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -20,52 +22,52 @@
 #include "hal_radio.h"
 
 /*===========================================================================
- * 全局变量定义
+ * Global definitions
  *===========================================================================*/
 
-/* 随机静态地址: 66:55:44:33:22:11
- * 在 BLE PDU 中以小端存储 (LSB first) */
+/* Random static address: 66:55:44:33:22:11
+ * Stored little-endian (LSB first) inside the BLE PDU. */
 const uint8_t adv_addr[BDADDR_SIZE] = {
 	0x11, 0x22, 0x33, 0x44, 0x55, 0x66
 };
 
-/* AD 结构体:
+/* AD structures:
  *   Flags: Len=2, Type=0x01, Val=0x06 (LE General Discoverable + BR/EDR Not Supported)
  *   Complete Local Name: Len=10, Type=0x09, Val="ZephyrRaw"
  */
-static const uint8_t adv_data[] = {
+static const uint8_t raw_adv_data[] = {
 	0x02, 0x01, 0x06,
 	0x0A, 0x09, 'Z', 'e', 'p', 'h', 'y', 'r', 'R', 'a', 'w'
 };
 
-#define ADV_DATA_LEN sizeof(adv_data)
+#define ADV_DATA_LEN sizeof(raw_adv_data)
 
-/* PDU 缓冲区 — 使用 Controller 标准 struct pdu_adv */
+/* PDU buffer - uses the controller-standard struct pdu_adv */
 struct pdu_adv pdu __aligned(4);
 
 /*===========================================================================
- * 使用 struct pdu_adv 构造标准广播 PDU
+ * Build a standard advertising PDU with struct pdu_adv
  *===========================================================================*/
 static void build_adv_pdu(void)
 {
 	memset(&pdu, 0, sizeof(pdu));
 
-	/* PDU Header (由 struct pdu_adv 的 bitfield 字段构成) */
-	pdu.type    = PDU_ADV_TYPE_NONCONN_IND; /* 0x02: 不可连接广播 */
+	/* PDU header (encoded by the struct pdu_adv bitfields) */
+	pdu.type    = PDU_ADV_TYPE_NONCONN_IND; /* 0x02: non-connectable advertising */
 	pdu.tx_addr = 1;                        /* TxAdd=1: Random Address */
 	pdu.rx_addr = 0;
 	pdu.len     = BDADDR_SIZE + ADV_DATA_LEN;
 
 	/* PDU Payload: AdvA (6 bytes) + AdvData */
 	memcpy(pdu.adv_ind.addr, adv_addr, BDADDR_SIZE);
-	memcpy(pdu.adv_ind.data, adv_data, ADV_DATA_LEN);
+	memcpy(pdu.adv_ind.data, raw_adv_data, ADV_DATA_LEN);
 
 	printk("PDU built: type=0x%02X tx_addr=%d len=%d\n",
 	       pdu.type, pdu.tx_addr, pdu.len);
 }
 
 /*===========================================================================
- * 主函数
+ * Main entry
  *===========================================================================*/
 int main(void)
 {
@@ -73,15 +75,15 @@ int main(void)
 	printk("Device Name: ZephyrRaw\n");
 	printk("Address: 66:55:44:33:22:11 (Random Static)\n\n");
 
-	/* 注意: 我们不调用 bt_enable(), 直接使用底层 HAL */
+	/* Note: this demo does not call bt_enable(); it uses the low-level HAL directly. */
 
-	/* 第零步: 启动 HFCLK — RADIO 的前置条件 */
+	/* Step 0: start HFCLK, which is required before using RADIO. */
 	hfclk_start();
 
-	/* 配置 RADIO */
+	/* Configure RADIO. */
 	radio_configure();
 
-	/* 构造广播 PDU */
+	/* Build the advertising PDU. */
 	build_adv_pdu();
 
 	printk("\nStarting advertising on channels 37/38/39...\n");
@@ -91,7 +93,7 @@ int main(void)
 	while (1) {
 		count++;
 
-		/* 在三个广播信道上依次发送 (模拟真实 BLE 广播事件) */
+		/* Send on the three advertising channels in order, like a real BLE advertising event. */
 		send_on_channel(37);
 		send_on_channel(38);
 		send_on_channel(39);
@@ -100,7 +102,7 @@ int main(void)
 			printk("Sent %d advertising events\n", count);
 		}
 
-		/* ~100ms 广播间隔 */
+		/* ~100 ms advertising interval */
 		k_msleep(100);
 	}
 

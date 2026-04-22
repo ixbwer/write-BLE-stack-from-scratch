@@ -2,11 +2,13 @@
 
 cmake_minimum_required(VERSION 3.20.0)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(ble_phy_raw_tx)
+project(ble_phy_tifs_sw)
 
 target_sources(app PRIVATE
   src/main.c
   ../stack/hal_radio.c
+  ../stack/ll_pdu.c
+  ../stack/adv.c
   ../stack/compat_globals.c
 )
 
