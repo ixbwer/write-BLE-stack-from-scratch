@@ -1,0 +1,76 @@
+name: BLE Demo CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.demo }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        demo:
+          - 01_tx_advertise
+          - 02_scannable_adv
+          - 04_phy_connection
+          - 05_phy_anchor_adjust
+          - 06_phy_data_channel
+          - 07_phy_slave_latency
+          - 08_phy_ll_procedures
+          - 09_phy_hci
+          - 10_phy_multi_pdu
+          - 11_phy_slave_procedures
+          - 12_phy_l2cap_sig
+          - 13_phy_encryption
+          - 14_phy_smp
+          - 15_phy_att
+          - 16_phy_gatt
+
+    steps:
+      - name: Checkout application repository
+        uses: actions/checkout@v4
+        with:
+          path: app
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Zephyr workspace
+        uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: app
+          toolchains: arm-zephyr-eabi
+          sdk-version: 0.17.0
+
+      - name: Build demo
+        shell: bash
+        run: |
+          west build -b nrf52dk/nrf52832 app/${{ matrix.demo }} \
+            -p \
+            --build-dir build/${{ matrix.demo }}
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.demo }}
+          if-no-files-found: error
+          path: |
+            build/${{ matrix.demo }}/zephyr/zephyr.bin
+            build/${{ matrix.demo }}/zephyr/zephyr.elf
+            build/${{ matrix.demo }}/zephyr/zephyr.hex
+            build/${{ matrix.demo }}/zephyr/.config
+            build/${{ matrix.demo }}/zephyr/zephyr.dts

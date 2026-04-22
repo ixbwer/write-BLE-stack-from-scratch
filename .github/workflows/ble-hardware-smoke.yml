@@ -1,0 +1,65 @@
+name: BLE Hardware Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      transport:
+        description: Bumble HCI transport, for example usb:2FE3:000B or serial:COM3
+        required: true
+        default: usb:2FE3:000B
+      target:
+        description: Peripheral BLE address exposed by the demo
+        required: true
+        default: 66:55:44:33:22:11
+      duration:
+        description: Connection hold time in seconds
+        required: true
+        default: '15'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on:
+      - self-hosted
+      - windows
+
+    steps:
+      - name: Checkout application repository
+        uses: actions/checkout@v4
+        with:
+          path: app
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Zephyr workspace
+        uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: app
+          toolchains: arm-zephyr-eabi
+          sdk-version: 0.17.0
+
+      - name: Install Bumble test dependencies
+        shell: pwsh
+        run: |
+          python -m venv .ble-tools-venv
+          .\.ble-tools-venv\Scripts\python.exe -m pip install --upgrade pip
+          .\.ble-tools-venv\Scripts\pip.exe install  bumble
+
+      - name: Build and flash 04_phy_connection
+        shell: pwsh
+        run: |
+          west build -b nrf52dk/nrf52832 app/04_phy_connection -p --build-dir build/04_phy_connection
+          west flash --build-dir build/04_phy_connection
+
+      - name: Run Bumble connection smoke test
+        shell: pwsh
+        run: |
+          .\.ble-tools-venv\Scripts\python.exe app\tools\04_phy_connection\bumble_connect.py `
+            --transport "${{ inputs.transport }}" `
+            --target "${{ inputs.target }}" `
+            --duration "${{ inputs.duration }}"
